@@ -1,134 +1,91 @@
-/**
- * Kassette plugin
- * @param {object} pluginConfig - Plugin settings
- * @param {string} pluginConfig.apiKey - Kassette project API key
- * @param {object} pluginConfig.options - Kassette SDK options
- * @param {string} pluginConfig.initialSessionId - Set initial session ID
- * @return {*}
- * @example
- *
- * kassettePlugin({
- *   sourceId: 'id',
- *   endPoint: 'https://api.kassette.ai',
- *   }
- * })
- */
-function kassettePlugin(pluginConfig = {}) {
-  // Amplitude client instance.
+import axios from "axios";
+
+export default function kassette(pluginConfig = {})  {
+
+  let initialized = false;
   let client = null;
-  // Flag is set to true after amplitude client instance is initialized.
-  let kassetteInitCompleted = false;
-
-  const initComplete = (d) => {
-    client = d;
-    kassetteInitCompleted = true;
-  };
-
   return {
     name: "kassette",
     config: pluginConfig,
+    initialize: ({config}) => {
 
-    initialize: ({ config }) => {
-      const { sourceId, endpoint, initialSessionId, options = {} } = config
+      const {sourceId, endpoint} = config;
+      console.log('Kassette initialized')
+
       if (!sourceId) {
-        throw new Error("Kassette project sourceId is not defined")
+        throw new Error("Kassette project sourceId is not defined");
       }
+
       if (!endpoint) {
-        throw new Error("Kassette project EndPoint is not defined")
+        throw new Error("Kassette project EndPoint is not defined");
       }
 
-      if (options && typeof options !== "object") {
-        throw new Error("Kassette SDK options must be an object")
-      }
+      initialized = true;
 
-      // Set initial session id. Ref https://bit.ly/3vElAym
-      if (initialSessionId) {
-        setTimeout(() => setSessionId(initialSessionId), 10)
-      }
-      Kassette.initialize(sourceId, endpoint)
     },
+    page: function page(_ref2) {
 
-    page: ({ payload: { properties, options } }) => {
-      let eventType = "Page View"
+      var _ref2$payload = _ref2.payload,
+          properties = _ref2$payload.properties,
+          options = _ref2$payload.options;
+      var eventType = "Page View";
+
+
       if (options && options.eventType) {
-        eventType = options.eventType
+        eventType = options.eventType;
       }
-      Kassette.getInstance().sendMetric(eventType, properties)
+
+      this.sendMetric(eventType, properties);
     },
-
-    track: ({ payload: { event, properties } }) => {
-      client.sendMetric(event, properties)
+    track: function track(_ref3) {
+      var _ref3$payload = _ref3.payload,
+          event = _ref3$payload.event,
+          properties = _ref3$payload.properties;
+      // client.sendMetric(event, properties);
     },
+    identify: function identify(_ref4) {
 
-    identify: ({ payload: { userId, traits }, instance }) => {
-      client.setUserId(userId)
-      client.setUserProperties(traits)
+      var _ref4$payload = _ref4.payload,
+          userId = _ref4$payload.userId,
+          traits = _ref4$payload.traits;
+      _ref4.instance;
+      setUserId(userId)
+      client.setUserProperties(traits);
     },
+    loaded: function loaded() {
+      return true;
+    },
+    sendMetric: function sendMetric(type, _ref5) {
 
-    loaded: () => kassetteInitCompleted,
-
+      const payload = {
+        type: type,
+        sourceId: this.config.sourceId,
+        props: _ref5
+      };
+      if(process.client) {
+        payload.userId = localStorage.getItem('kassette_user_id');
+        payload.userTraits = JSON.parse(localStorage.getItem('kassette_user_properties'));
+      }
+      axios.post(this.config.endpoint, JSON.stringify(payload))
+    },
     // https://getanalytics.io/plugins/writing-plugins/#adding-custom-methods
     methods: {
       /**
        * analytics.plugins['kassette'].setSessionId('your-id')
        */
-      setSessionId: setSessionId,
-    }
-  }
-}
-
-/**
- * @param {string} sessionId - Minimum visit length before first page ping event fires
- */
-function setSessionId(sessionId) {
-  if (typeof window.kassette === 'undefined') {
-    console.log('Kassette not loaded yet')
-    return false
-  }
-  const kassetteInstance = window.kassette.getInstance()
-  kassetteInstance.setSessionId(sessionId)
-}
-
-window.post = function(url, data) {
-  return fetch(url, {method: "POST", headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
-}
-
-
-const Kassette = (function () {
-  function SingletonClass() {
-    //do stuff
-  }
-  let sourceId = null;
-  let endPoint = null;
-
-  let instance;
-  return {
-    getInstance: function () {
-      if (instance == null) {
-        instance = new SingletonClass();
-        // Hide the constructor so the returned object can't be new'd...
-        instance.constructor = null;
-      }
-      return instance;
-    },
-    initialize: (sourceId, endPoint) => {
-      this.sourceId = sourceId || null;
-      this.endPoint = endPoint || null;
-    },
-    sendMetric: (type, {payload}) => {
-      payload.type = type;
-      payload.sourceId = sourceId;
-      payload.userId = window.localStorage.getItem('kassette_user_id');
-      payload.userTraits = JSON.parse(window.localStorage.getItem('kassette_user_properties'));
-      window.post(endPoint, payload).then(r => console.log(r))
-    },
-    setUserId: (userId) => {
-      window.localStorage.setItem('kassette_user_id', userId)
-    },
-    setUserProperties: (traits) => {
-      window.localStorage.setItem('kassette_user_properties', JSON.stringify(traits))
+      setUserId: setUserId
     }
   };
-})();
 
-export default kassettePlugin
+  /**
+   * @param {string} sessionId - Minimum visit length before first page ping event fires
+   */
+  function setUserId(userId) {
+    this.$auth.$storage.setCookie("userId", userId, true)
+  }
+
+
+  /* This module will shake out unused code + work in browser and node 🎉 */
+  var index = kassettePlugin ;
+  return index;
+};
